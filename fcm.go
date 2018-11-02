@@ -87,6 +87,7 @@ type NotificationPayload struct {
 	TitleLocKey      string `json:"title_loc_key,omitempty"`
 	TitleLocArgs     string `json:"title_loc_args,omitempty"`
 	AndroidChannelID string `json:"android_channel_id,omitempty"`
+	Image 			 string `json:"image,omitempty"`
 }
 
 // NewFcmClient init and create fcm client
@@ -155,14 +156,12 @@ func (this *FcmClient) apiKeyHeader() string {
 
 // sendOnce send a single request to fcm
 func (this *FcmClient) sendOnce() (*FcmResponseStatus, error) {
-
 	fcmRespStatus := new(FcmResponseStatus)
 
 	jsonByte, err := this.Message.toJsonByte()
 	if err != nil {
 		return fcmRespStatus, err
 	}
-
 	request, err := http.NewRequest("POST", fcmServerUrl, bytes.NewBuffer(jsonByte))
 	request.Header.Set("Authorization", this.apiKeyHeader())
 	request.Header.Set("Content-Type", "application/json")
@@ -372,4 +371,93 @@ func (this *FcmResponseStatus) GetRetryAfterTime() (t time.Duration, e error) {
 func (this *FcmClient) SetCondition(condition string) *FcmClient {
 	this.Message.Condition = condition
 	return this
+}
+
+
+// FcmMsgAndroid represents fcm request message
+type FcmMsgAndroid struct {
+	To                    string              `json:"to,omitempty"`
+	RegistrationIds       []string            `json:"registration_ids,omitempty"`
+	CollapseKey           string              `json:"collapse_key,omitempty"`
+	Priority              string              `json:"priority,omitempty"`
+	Notification          NotificationPayloadAndroid `json:"data,omitempty"`
+	ContentAvailable      bool                `json:"content_available,omitempty"`
+	DelayWhileIdle        bool                `json:"delay_while_idle,omitempty"`
+	TimeToLive            int                 `json:"time_to_live,omitempty"`
+	RestrictedPackageName string              `json:"restricted_package_name,omitempty"`
+	DryRun                bool                `json:"dry_run,omitempty"`
+	Condition             string              `json:"condition,omitempty"`
+	MutableContent        bool                `json:"mutable_content,omitempty"`
+}
+
+// NotificationPayload notification message payload
+type NotificationPayloadAndroid struct {
+	Title            string `json:"title,omitempty"`
+	Body             string `json:"body,omitempty"`
+	Icon             string `json:"icon,omitempty"`
+	Sound            string `json:"sound,omitempty"`
+	Badge            string `json:"badge,omitempty"`
+	Data             interface{} `json:"data,omitempty"`
+	Tag              string `json:"tag,omitempty"`
+	Color            string `json:"color,omitempty"`
+	ClickAction      string `json:"click_action,omitempty"`
+	BodyLocKey       string `json:"body_loc_key,omitempty"`
+	BodyLocArgs      string `json:"body_loc_args,omitempty"`
+	TitleLocKey      string `json:"title_loc_key,omitempty"`
+	TitleLocArgs     string `json:"title_loc_args,omitempty"`
+	AndroidChannelID string `json:"android_channel_id,omitempty"`
+	Image 			 string `json:"image,omitempty"`
+}
+
+// sendOnce send a single request to fcm
+func (this *FcmClient) SendAndroid() (*FcmResponseStatus, error) {
+
+	fcmRespStatus := new(FcmResponseStatus)
+
+	var fcmAndroid FcmMsgAndroid
+	fcmAndroid.Notification.Title =this.Message.Notification.Title
+	fcmAndroid.Notification.Image =this.Message.Notification.Image
+	fcmAndroid.Notification.Body =this.Message.Notification.Body
+	fcmAndroid.Notification.Icon =this.Message.Notification.Icon
+	fcmAndroid.Notification.ClickAction =this.Message.Notification.ClickAction
+	fcmAndroid.Notification.Data=this.Message.Data
+	fcmAndroid.RegistrationIds= this.Message.RegistrationIds
+
+	jsonByte, err := json.Marshal(fcmAndroid)
+	if err != nil {
+		return fcmRespStatus, err
+	}
+
+	request, err := http.NewRequest("POST", fcmServerUrl, bytes.NewBuffer(jsonByte))
+	request.Header.Set("Authorization", this.apiKeyHeader())
+	request.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+
+	if err != nil {
+		return fcmRespStatus, err
+	}
+	defer response.Body.Close()
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return fcmRespStatus, err
+	}
+
+	fcmRespStatus.StatusCode = response.StatusCode
+
+	fcmRespStatus.RetryAfter = response.Header.Get(retry_after_header)
+
+	if response.StatusCode != 200 {
+		return fcmRespStatus, nil
+	}
+
+	err = fcmRespStatus.parseStatusBody(body)
+	if err != nil {
+		return fcmRespStatus, err
+	}
+	fcmRespStatus.Ok = true
+
+	return fcmRespStatus, nil
 }
